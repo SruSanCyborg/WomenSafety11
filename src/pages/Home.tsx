@@ -3,10 +3,12 @@ import { useAuth } from '../contexts/AuthContext'
 import SOSButton from '../components/sos/SOSButton'
 import { supabase } from '../lib/supabase'
 import { detectShake } from '../lib/geolocation'
+import { useSOSContext } from '../contexts/SOSContext'
 import type { CheckinSchedule } from '../types'
 
 export default function Home() {
   const { profile } = useAuth()
+  const { triggerSOS } = useSOSContext()
   const [activeSchedule, setActiveSchedule] = useState<CheckinSchedule | null>(null)
   const [shakeEnabled, setShakeEnabled] = useState(false)
 
@@ -22,12 +24,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!shakeEnabled) return
-    const stop = detectShake(() => {
-      // Shake detected — trigger SOS via shake (handled at a higher level via button ref in future)
-      console.log('Shake SOS triggered')
-    })
+    const stop = detectShake(() => triggerSOS('shake'))
     return stop
-  }, [shakeEnabled])
+  }, [shakeEnabled, triggerSOS])
 
   return (
     <div className="flex flex-col items-center pt-6 gap-6">

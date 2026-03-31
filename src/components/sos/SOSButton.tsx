@@ -1,4 +1,4 @@
-import { useSOS } from '../../hooks/useSOS'
+import { useSOSContext } from '../../contexts/SOSContext'
 import GraceCountdown from './GraceCountdown'
 import SOSStatus from './SOSStatus'
 
@@ -23,7 +23,7 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function SOSButton() {
-  const { status, showGrace, countdown, triggerSOS, cancelSOS, cancelActiveSOSAsFalseAlarm, reset } = useSOS()
+  const { status, showGrace, countdown, triggerSOS, cancelSOS, cancelActiveSOSAsFalseAlarm, reset } = useSOSContext()
 
   const isActive = status !== 'idle' && status !== 'resolved' && status !== 'false_alarm'
 

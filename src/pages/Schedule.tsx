@@ -1,14 +1,23 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSOSContext } from '../contexts/SOSContext'
 import type { CheckinSchedule } from '../types'
+
+function formatCountdown(seconds: number) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
 
 export default function Schedule() {
   const { user } = useAuth()
+  const { triggerSOS } = useSOSContext()
   const [schedules, setSchedules] = useState<CheckinSchedule[]>([])
   const [form, setForm] = useState({ label: '', interval_min: 5 })
   const [loading, setLoading] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -19,6 +28,29 @@ export default function Schedule() {
       .order('created_at', { ascending: false })
       .then(({ data }) => setSchedules(data ?? []))
   }, [user])
+
+  // Auto-SOS: count down and fire if user misses a check-in
+  useEffect(() => {
+    const active = schedules.find((s) => s.is_active)
+    if (!active) { setTimeLeft(null); return }
+
+    const tick = () => {
+      const checkpoint = active.last_checkin ?? active.start_time
+      if (!checkpoint) { setTimeLeft(active.interval_min * 60); return }
+      const elapsed = Math.floor((Date.now() - new Date(checkpoint).getTime()) / 1000)
+      const remaining = active.interval_min * 60 - elapsed
+      if (remaining <= 0) {
+        setTimeLeft(0)
+        triggerSOS('checkin_miss')
+      } else {
+        setTimeLeft(remaining)
+      }
+    }
+
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [schedules, triggerSOS])
 
   async function createSchedule(e: FormEvent) {
     e.preventDefault()
@@ -127,6 +159,13 @@ export default function Schedule() {
                 {s.last_checkin && (
                   <p className="text-xs text-gray-400 mt-0.5">
                     Last check-in: {new Date(s.last_checkin).toLocaleTimeString()}
+                  </p>
+                )}
+                {s.is_active && timeLeft !== null && (
+                  <p className={`text-xs font-semibold mt-1 ${timeLeft <= 30 ? 'text-red-600 animate-pulse' : timeLeft <= 60 ? 'text-orange-500' : 'text-green-600'}`}>
+                    {timeLeft <= 0
+                      ? '⚠️ Missed! SOS triggered'
+                      : `⏱ Check in within ${formatCountdown(timeLeft)}`}
                   </p>
                 )}
               </div>

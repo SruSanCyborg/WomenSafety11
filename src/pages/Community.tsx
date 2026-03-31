@@ -9,6 +9,8 @@ export default function Community() {
   const [buddies, setBuddies] = useState<BuddyAvailability[]>([])
   const [myAvailability, setMyAvailability] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [requesting, setRequesting] = useState<string | null>(null)
+  const [requestedBuddies, setRequestedBuddies] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchBuddies()
@@ -25,10 +27,34 @@ export default function Community() {
   async function fetchBuddies() {
     const { data } = await supabase
       .from('buddy_availability')
-      .select('*, profile:user_id(full_name, avatar_url)')
+      .select('*')
       .eq('is_available', true)
       .order('last_seen', { ascending: false })
-    setBuddies(data ?? [])
+
+    if (!data) { setBuddies([]); return }
+
+    // Fetch profiles separately to avoid FK join issues
+    const userIds = data.map((b) => b.user_id)
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', userIds)
+
+    const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]))
+    setBuddies(data.map((b) => ({ ...b, profile: profileMap[b.user_id] ?? undefined })))
+  }
+
+  async function requestEscort(buddyUserId: string, buddyName: string) {
+    if (!user) return
+    setRequesting(buddyUserId)
+    await supabase.from('notifications').insert({
+      user_id: buddyUserId,
+      type: 'info',
+      title: '👥 Buddy Escort Request',
+      body: `Someone on campus needs an escort. Open the app to respond.`,
+    })
+    setRequestedBuddies((prev) => new Set(prev).add(buddyUserId))
+    setRequesting(null)
   }
 
   async function fetchMyAvailability() {
@@ -101,8 +127,14 @@ export default function Community() {
           </div>
         ) : (
           <div className="space-y-3">
-            {buddies.map((buddy) => (
-              <BuddyCard key={buddy.user_id} buddy={buddy} />
+            {buddies.filter(b => b.user_id !== user?.id).map((buddy) => (
+              <BuddyCard
+                key={buddy.user_id}
+                buddy={buddy}
+                requested={requestedBuddies.has(buddy.user_id)}
+                requesting={requesting === buddy.user_id}
+                onRequest={() => requestEscort(buddy.user_id, buddy.profile?.full_name ?? 'Buddy')}
+              />
             ))}
           </div>
         )}
@@ -111,7 +143,17 @@ export default function Community() {
   )
 }
 
-function BuddyCard({ buddy }: { buddy: BuddyAvailability }) {
+function BuddyCard({
+  buddy,
+  requested,
+  requesting,
+  onRequest,
+}: {
+  buddy: BuddyAvailability
+  requested: boolean
+  requesting: boolean
+  onRequest: () => void
+}) {
   const lastSeen = new Date(buddy.last_seen)
   const minutesAgo = Math.floor((Date.now() - lastSeen.getTime()) / 60000)
 
@@ -132,7 +174,20 @@ function BuddyCard({ buddy }: { buddy: BuddyAvailability }) {
           Active {minutesAgo < 1 ? 'just now' : `${minutesAgo}m ago`}
         </p>
       </div>
-      <span className="w-2.5 h-2.5 bg-green-400 rounded-full flex-shrink-0 animate-pulse" />
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
+        {requested ? (
+          <span className="text-xs text-green-600 font-semibold">Requested ✓</span>
+        ) : (
+          <button
+            onClick={onRequest}
+            disabled={requesting}
+            className="text-xs bg-primary-100 text-primary-700 font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
+          >
+            {requesting ? '...' : 'Request'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
