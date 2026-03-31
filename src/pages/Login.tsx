@@ -50,11 +50,6 @@ export default function Login() {
           <p className="text-sm text-gray-500 mt-1">Your safety, always first.</p>
         </div>
 
-        {/* Temporary debug — remove after fixing */}
-        <div className="text-xs text-center mb-2 text-gray-400 break-all">
-          URL: {import.meta.env.VITE_SUPABASE_URL ?? 'MISSING'}
-        </div>
-
         <div className="card">
           <h2 className="text-xl font-bold mb-5">Sign In</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
