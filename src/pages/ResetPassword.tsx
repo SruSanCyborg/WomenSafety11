@@ -11,10 +11,21 @@ export default function ResetPassword() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Supabase puts access_token in the URL hash after clicking reset link
+    // Supabase puts tokens in the URL hash: #access_token=...&type=recovery
     const hash = window.location.hash
-    if (hash.includes('access_token')) {
-      setReady(true)
+    const params = new URLSearchParams(hash.replace('#', ''))
+    const accessToken = params.get('access_token')
+    const type = params.get('type')
+
+    if (accessToken && type === 'recovery') {
+      // Set the session so updateUser works
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: params.get('refresh_token') ?? '',
+      }).then(({ error }) => {
+        if (error) setError('Invalid or expired link. Please request a new one.')
+        else setReady(true)
+      })
     } else {
       setError('Invalid or expired reset link. Please request a new one.')
     }
@@ -23,13 +34,15 @@ export default function ResetPassword() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (password !== confirm) { setError('Passwords do not match'); return }
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (password.length < 6) { setError('Min 6 characters'); return }
     setLoading(true)
-    setError('')
     const { error } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (error) setError(error.message)
-    else navigate('/login', { replace: true })
+    else {
+      await supabase.auth.signOut()
+      navigate('/login', { replace: true })
+    }
   }
 
   return (
@@ -39,11 +52,17 @@ export default function ResetPassword() {
           <div className="text-6xl mb-3">🛡️</div>
           <h1 className="text-2xl font-black text-primary-700">SafeHer Campus</h1>
         </div>
-
         <div className="card">
           <h2 className="text-xl font-bold mb-5">Set New Password</h2>
-          {!ready ? (
-            <p className="text-red-600 text-sm">{error}</p>
+          {error && !ready ? (
+            <div className="text-center">
+              <p className="text-red-600 text-sm mb-4">{error}</p>
+              <button onClick={() => navigate('/forgot-password')} className="btn-primary w-full">
+                Request New Link
+              </button>
+            </div>
+          ) : !ready ? (
+            <p className="text-gray-500 text-sm text-center">Verifying link...</p>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
