@@ -6,6 +6,8 @@ import AppLayout from './components/layout/AppLayout'
 // Auth pages
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 // App pages
 import Home from './pages/Home'
@@ -29,6 +31,8 @@ export default function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* App routes — requires auth */}
           <Route

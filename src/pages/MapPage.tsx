@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { supabase } from '../lib/supabase'
@@ -52,6 +52,10 @@ export default function MapPage() {
   const [recordingPoints, setRecordingPoints] = useState<[number, number][]>([])
   const [isRecording, setIsRecording] = useState(false)
 
+  // Ref so the watchPosition callback always sees the latest value (fixes stale closure bug)
+  const isRecordingRef = useRef(false)
+  const recordingPointsRef = useRef<[number, number][]>([])
+
   useEffect(() => {
     Promise.all([
       supabase.from('incident_reports').select('*').eq('status', 'verified'),
@@ -70,29 +74,46 @@ export default function MapPage() {
     const stop = watchPosition((lat, lng) => {
       setUserLat(lat)
       setUserLng(lng)
-      if (isRecording) {
-        setRecordingPoints(prev => [...prev, [lng, lat]])
+      if (isRecordingRef.current) {
+        const point: [number, number] = [lng, lat]
+        recordingPointsRef.current = [...recordingPointsRef.current, point]
+        setRecordingPoints([...recordingPointsRef.current])
       }
-    })
+    }, 3000)
+
     return stop
   }, [])
 
-  useEffect(() => {
-    if (isRecording && userLat && userLng) {
-      setRecordingPoints(prev => [...prev, [userLng, userLat]])
+  function startRecording() {
+    recordingPointsRef.current = []
+    setRecordingPoints([])
+    isRecordingRef.current = true
+    setIsRecording(true)
+    // Add current position as first point immediately
+    if (userLat && userLng) {
+      const point: [number, number] = [userLng, userLat]
+      recordingPointsRef.current = [point]
+      setRecordingPoints([point])
     }
-  }, [isRecording])
+  }
+
+  function stopRecording() {
+    isRecordingRef.current = false
+    setIsRecording(false)
+  }
 
   async function saveRoute() {
-    if (!user || recordingPoints.length < 2 || !newRouteName.trim()) return
+    if (!user || recordingPointsRef.current.length < 2 || !newRouteName.trim()) return
     setSavingRoute(true)
     const { data } = await supabase.from('safe_routes').insert({
       user_id: user.id,
       name: newRouteName.trim(),
-      route_geojson: { type: 'LineString', coordinates: recordingPoints },
+      route_geojson: { type: 'LineString', coordinates: recordingPointsRef.current },
     }).select().single()
     if (data) setRoutes(prev => [data, ...prev])
+    recordingPointsRef.current = []
     setRecordingPoints([])
+    isRecordingRef.current = false
     setIsRecording(false)
     setNewRouteName('')
     setSavingRoute(false)
@@ -112,7 +133,6 @@ export default function MapPage() {
         <p className="text-sm text-gray-500">Incidents, safe routes, and your location</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
         {(['map', 'routes'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -165,6 +185,13 @@ export default function MapPage() {
                     </Popup>
                   </Polyline>
                 ))}
+                {/* Show live recording path */}
+                {recordingPoints.length > 1 && (
+                  <Polyline
+                    positions={recordingPoints.map(([lng, lat]) => [lat, lng] as [number, number])}
+                    pathOptions={{ color: '#f97316', weight: 5, opacity: 0.9, dashArray: '6 3' }}
+                  />
+                )}
               </MapContainer>
             )}
           </div>
@@ -182,7 +209,6 @@ export default function MapPage() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Incidents', value: incidents.length },
@@ -200,45 +226,42 @@ export default function MapPage() {
 
       {tab === 'routes' && (
         <div className="space-y-4">
-          {/* Record new route */}
           <div className="card space-y-3 border-2 border-primary-100">
             <p className="font-bold text-gray-800">Record New Safe Route</p>
-            <p className="text-xs text-gray-500">Walk your safe path and record it to share with others.</p>
+            <p className="text-xs text-gray-500">Walk your path — GPS points are captured automatically every 3 seconds.</p>
 
             {!isRecording ? (
-              <button onClick={() => setIsRecording(true)}
-                className="btn-primary w-full">
+              <button onClick={startRecording} className="btn-primary w-full">
                 🔴 Start Recording Route
               </button>
             ) : (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-red-600 font-semibold">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  Recording... {recordingPoints.length} points captured
+                <div className="flex items-center gap-2 text-sm text-red-600 font-semibold animate-pulse">
+                  <span className="w-2 h-2 bg-red-500 rounded-full" />
+                  Recording... {recordingPoints.length} point{recordingPoints.length !== 1 ? 's' : ''} captured
                 </div>
-                <input type="text" className="input" placeholder="Route name (e.g. Library to Hostel Block A)"
+                <input type="text" className="input" placeholder="Route name (e.g. Library → Hostel Block A)"
                   value={newRouteName} onChange={e => setNewRouteName(e.target.value)} />
                 <div className="flex gap-2">
                   <button onClick={saveRoute} disabled={savingRoute || recordingPoints.length < 2 || !newRouteName.trim()}
-                    className="flex-1 btn-primary text-sm">
+                    className="flex-1 btn-primary text-sm disabled:opacity-50">
                     {savingRoute ? 'Saving...' : '💾 Save Route'}
                   </button>
-                  <button onClick={() => { setIsRecording(false); setRecordingPoints([]) }}
+                  <button onClick={stopRecording}
                     className="flex-1 bg-gray-100 text-gray-600 font-semibold py-2 px-4 rounded-lg text-sm">
-                    Cancel
+                    ⏹ Stop
                   </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Saved routes */}
           <div className="space-y-2">
             <p className="font-semibold text-gray-700 text-sm">Saved Routes ({routes.length})</p>
             {routes.length === 0 && (
               <div className="card text-center py-8">
                 <p className="text-3xl mb-2">🛤</p>
-                <p className="text-gray-500 text-sm">No routes yet. Record your first safe route!</p>
+                <p className="text-gray-500 text-sm">No routes yet. Record your first safe route above!</p>
               </div>
             )}
             {routes.map(route => (
