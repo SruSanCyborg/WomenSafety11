@@ -12,9 +12,11 @@ export default function ForgotPassword() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
+    const redirectTo = window.location.hostname === 'localhost'
+      ? `${window.location.origin}/reset-password`
+      : 'https://women-safety11.vercel.app/reset-password'
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setLoading(false)
     if (error) setError(error.message)
     else setSent(true)
