@@ -21,5 +21,17 @@
     }
   },
   "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "src/alertservice.tsx",
+    "src/authservice.tsx",
+    "src/contactservice.tsx",
+    "src/geofenceservice.tsx",
+    "src/index.tsx",
+    "src/locarionservice.tsx",
+    "src/notification.tsx",
+    "src/riskanalysis.tsx",
+    "src/trackingservice.tsx"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
