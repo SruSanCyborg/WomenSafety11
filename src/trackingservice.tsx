@@ -1,4 +1,4 @@
-import { getCurrentLocation } from "./locationService";
+import { getCurrentLocation } from "./locarionservice";
 
 export async function startLiveTracking(interval: number = 3000) {
     console.log("📡 Live tracking started...");

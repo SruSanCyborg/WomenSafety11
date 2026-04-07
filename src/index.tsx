@@ -1,6 +1,6 @@
-import { sendSOSAlert } from "./alertService";
-import { getCurrentLocation } from "./locationService";
-import { getEmergencyContacts } from "./contactService";
+import { sendSOSAlert } from "./alertservice";
+import { getCurrentLocation } from "./locarionservice";
+import { getEmergencyContacts } from "./contactservice";
 
 async function main() {
     console.log("🚨 Women Safety App Started");
