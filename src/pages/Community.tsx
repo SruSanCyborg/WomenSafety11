@@ -65,30 +65,36 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 export async function callGemini(messages: AIMessage[], systemPrompt: string): Promise<string> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-  if (!apiKey) return '⚠️ AI screening unavailable — VITE_GEMINI_API_KEY not set.'
+  const apiKey = import.meta.env.VITE_GROQ_API_KEY
+  if (!apiKey) return '⚠️ AI screening unavailable — VITE_GROQ_API_KEY not set.'
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: messages.length > 0
-            ? messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
-            : [{ role: 'user', parts: [{ text: 'Hello' }] }],
-        }),
-      }
-    )
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...(messages.length > 0
+            ? messages.map(m => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.content }))
+            : [{ role: 'user', content: 'Hello' }]
+          ),
+        ],
+        max_tokens: 200,
+        temperature: 0.7,
+      }),
+    })
     const data = await res.json()
     if (data.error) {
-      console.error('Gemini error:', data.error)
+      console.error('Groq error:', data.error)
       return `AI error: ${data.error.message}`
     }
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "I'm having trouble responding right now."
+    return data.choices?.[0]?.message?.content ?? "I'm having trouble responding right now."
   } catch (e) {
-    console.error('Gemini fetch error:', e)
+    console.error('Groq fetch error:', e)
     return 'Connection error. Please try again.'
   }
 }
