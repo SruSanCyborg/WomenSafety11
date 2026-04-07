@@ -75,13 +75,20 @@ export async function callGemini(messages: AIMessage[], systemPrompt: string): P
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: messages.map(m => ({ role: m.role, parts: [{ text: m.content }] })),
+          contents: messages.length > 0
+            ? messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
+            : [{ role: 'user', parts: [{ text: 'Hello' }] }],
         }),
       }
     )
     const data = await res.json()
+    if (data.error) {
+      console.error('Gemini error:', data.error)
+      return `AI error: ${data.error.message}`
+    }
     return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "I'm having trouble responding right now."
-  } catch {
+  } catch (e) {
+    console.error('Gemini fetch error:', e)
     return 'Connection error. Please try again.'
   }
 }
